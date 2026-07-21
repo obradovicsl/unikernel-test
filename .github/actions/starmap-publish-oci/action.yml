@@ -26,13 +26,16 @@ runs:
         username: ${{ github.actor }}
         password: ${{ inputs.ghcrToken }}
 
-    - name: Set up kraft
-      uses: unikraft/kraftkit@staging
-
     - name: Build and push unikernel
-      shell: bash
-      run: |
-        kraft pkg --as oci --name ${{ inputs.image }}:latest --plat qemu --arch x86_64 --push .
+      uses: unikraft/kraftkit@staging
+      with:
+        workdir: .
+        runtime: base:latest
+        rootfs: ./Dockerfile
+        arch: x86_64
+        plat: qemu
+        name: ${{ inputs.image }}:latest
+        push: true
 
     - name: Resolve digest
       id: digest
