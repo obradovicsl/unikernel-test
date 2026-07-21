@@ -15,6 +15,10 @@ inputs:
     description: version label; empty falls back to git tag, then starmap auto-increment
     required: false
     default: ""
+  nodeType:
+    description: "StoredProcedure | Trigger"
+    required: false
+    default: StoredProcedure
 
 runs:
   using: composite
@@ -56,7 +60,7 @@ runs:
     - name: Notify starmap
       shell: bash
       run: |
-        BODY="{\"sourceType\":\"oci\",\"image\":\"${{ inputs.image }}\",\"sha\":\"${{ steps.digest.outputs.sha }}\",\"semver\":\"${{ steps.ver.outputs.semver }}\"}"
+        BODY="{\"sourceType\":\"oci\",\"nodeType\":\"${{ inputs.nodeType }}\",\"image\":\"${{ inputs.image }}\",\"sha\":\"${{ steps.digest.outputs.sha }}\",\"semver\":\"${{ steps.ver.outputs.semver }}\"}"
         echo "POST ${{ inputs.starmapUrl }}/apis/core/v1/layer"
         echo "$BODY"
         curl -sf -X POST "${{ inputs.starmapUrl }}/apis/core/v1/layer" \

@@ -13,6 +13,10 @@ inputs:
     description: version label; empty falls back to git tag, then starmap auto-increment
     required: false
     default: ""
+  nodeType:
+    description: "StoredProcedure | Trigger"
+    required: false
+    default: StoredProcedure
 
 runs:
   using: composite
@@ -30,7 +34,7 @@ runs:
     - name: Notify starmap
       shell: bash
       run: |
-        BODY="{\"sourceType\":\"git\",\"pull\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}\",\"command\":\"${{ inputs.command }}\",\"sha\":\"${GITHUB_SHA}\",\"semver\":\"${{ steps.ver.outputs.semver }}\"}"
+        BODY="{\"sourceType\":\"git\",\"nodeType\":\"${{ inputs.nodeType }}\",\"pull\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}\",\"command\":\"${{ inputs.command }}\",\"sha\":\"${GITHUB_SHA}\",\"semver\":\"${{ steps.ver.outputs.semver }}\"}"
         echo "POST ${{ inputs.starmapUrl }}/apis/core/v1/layer"
         echo "$BODY"
         curl -sf -X POST "${{ inputs.starmapUrl }}/apis/core/v1/layer" \
