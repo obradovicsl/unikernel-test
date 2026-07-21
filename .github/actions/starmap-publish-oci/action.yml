@@ -1,0 +1,63 @@
+name: Starmap publish layer (oci)
+description: Build a unikernel, push it to an OCI registry, and register the version in starmap
+
+inputs:
+  starmapUrl:
+    description: Base URL of the starmap gateway
+    required: true
+  image:
+    description: OCI image without tag, e.g. ghcr.io/owner/name
+    required: true
+  ghcrToken:
+    description: token for GHCR login
+    required: true
+  semver:
+    description: version label; empty falls back to git tag, then starmap auto-increment
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Log in to GHCR
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.actor }}
+        password: ${{ inputs.ghcrToken }}
+
+    - name: Set up kraft
+      uses: unikraft/kraftkit@staging
+
+    - name: Build and push unikernel
+      shell: bash
+      run: |
+        kraft pkg --as oci --name ${{ inputs.image }}:latest --plat qemu --arch x86_64 --push .
+
+    - name: Resolve digest
+      id: digest
+      shell: bash
+      run: |
+        DIGEST=$(docker buildx imagetools inspect ${{ inputs.image }}:latest --format '{{.Manifest.Digest}}' 2>/dev/null || true)
+        if [ -z "$DIGEST" ]; then DIGEST="${GITHUB_SHA}"; fi
+        echo "sha=$DIGEST" >> "$GITHUB_OUTPUT"
+
+    - name: Resolve version
+      id: ver
+      shell: bash
+      run: |
+        SEMVER="${{ inputs.semver }}"
+        if [ -z "$SEMVER" ] && [ "$GITHUB_REF_TYPE" = "tag" ]; then
+          SEMVER="$GITHUB_REF_NAME"
+        fi
+        echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+
+    - name: Notify starmap
+      shell: bash
+      run: |
+        BODY="{\"sourceType\":\"oci\",\"image\":\"${{ inputs.image }}\",\"sha\":\"${{ steps.digest.outputs.sha }}\",\"semver\":\"${{ steps.ver.outputs.semver }}\"}"
+        echo "POST ${{ inputs.starmapUrl }}/apis/core/v1/layer"
+        echo "$BODY"
+        curl -sf -X POST "${{ inputs.starmapUrl }}/apis/core/v1/layer" \
+          -H "Content-Type: application/json" \
+          -d "$BODY"
