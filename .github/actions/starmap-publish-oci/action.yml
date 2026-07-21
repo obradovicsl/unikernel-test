@@ -30,8 +30,6 @@ runs:
       uses: unikraft/kraftkit@staging
       with:
         workdir: .
-        runtime: base:latest
-        rootfs: ./Dockerfile
         arch: x86_64
         plat: qemu
         name: ${{ inputs.image }}:latest
