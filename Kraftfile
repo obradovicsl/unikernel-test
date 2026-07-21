@@ -1,0 +1,9 @@
+spec: v0.6
+
+name: unikernel-test
+
+runtime: base:latest
+
+rootfs: ./Dockerfile
+
+cmd: ["/helloworld"]

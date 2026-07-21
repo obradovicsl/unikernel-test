@@ -1,0 +1,61 @@
+name: Starmap publish layer
+description: Publish a layer version to the c12s starmap registry (git or oci source)
+
+inputs:
+  starmapUrl:
+    description: Base URL of the starmap gateway
+    required: true
+  sourceType:
+    description: "oci | git"
+    required: true
+  image:
+    description: "OCI image without tag (oci only), e.g. ghcr.io/owner/name"
+    required: false
+    default: ""
+  command:
+    description: "build command (git only)"
+    required: false
+    default: ""
+  semver:
+    description: "version label; empty falls back to git tag, then starmap auto-increment"
+    required: false
+    default: ""
+
+runs:
+  using: composite
+  steps:
+    - name: Resolve version
+      id: ver
+      shell: bash
+      run: |
+        SEMVER="${{ inputs.semver }}"
+        if [ -z "$SEMVER" ] && [ "$GITHUB_REF_TYPE" = "tag" ]; then
+          SEMVER="$GITHUB_REF_NAME"
+        fi
+        echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
+
+    - name: Build payload
+      id: payload
+      shell: bash
+      run: |
+        if [ "${{ inputs.sourceType }}" = "git" ]; then
+          PAYLOAD=$(cat <<EOF
+        {"sourceType":"git","pull":"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}","command":"${{ inputs.command }}","sha":"${GITHUB_SHA}","semver":"${{ steps.ver.outputs.semver }}"}
+        EOF
+        )
+        else
+          PAYLOAD=$(cat <<EOF
+        {"sourceType":"oci","image":"${{ inputs.image }}","sha":"${STARMAP_OCI_DIGEST:-$GITHUB_SHA}","semver":"${{ steps.ver.outputs.semver }}"}
+        EOF
+        )
+        fi
+        echo "body=$PAYLOAD" >> "$GITHUB_OUTPUT"
+
+    - name: Notify starmap
+      shell: bash
+      run: |
+        echo "POST ${{ inputs.starmapUrl }}/apis/core/v1/layer"
+        echo '${{ steps.payload.outputs.body }}'
+        curl -sf -X POST "${{ inputs.starmapUrl }}/apis/core/v1/layer" \
+          -H "Content-Type: application/json" \
+          -d '${{ steps.payload.outputs.body }}'
