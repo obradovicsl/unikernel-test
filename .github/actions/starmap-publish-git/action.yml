@@ -5,36 +5,29 @@ inputs:
   starmapUrl:
     description: Base URL of the starmap gateway
     required: true
+  semver:
+    description: version to publish (e.g. v1.0.0)
+    required: true
   command:
     description: build command run at deploy time
     required: false
     default: ""
-  semver:
-    description: version label; empty falls back to git tag, then starmap auto-increment
+  arch:
+    description: build architecture (x86_64 | arm64 | ...)
     required: false
-    default: ""
+    default: x86_64
   nodeType:
-    description: "StoredProcedure | Trigger"
+    description: "StoredProcedure | Trigger | Event | Entrypoint"
     required: false
     default: StoredProcedure
 
 runs:
   using: composite
   steps:
-    - name: Resolve version
-      id: ver
-      shell: bash
-      run: |
-        SEMVER="${{ inputs.semver }}"
-        if [ -z "$SEMVER" ] && [ "$GITHUB_REF_TYPE" = "tag" ]; then
-          SEMVER="$GITHUB_REF_NAME"
-        fi
-        echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
-
     - name: Notify starmap
       shell: bash
       run: |
-        BODY="{\"sourceType\":\"git\",\"nodeType\":\"${{ inputs.nodeType }}\",\"pull\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}\",\"command\":\"${{ inputs.command }}\",\"sha\":\"${GITHUB_SHA}\",\"semver\":\"${{ steps.ver.outputs.semver }}\"}"
+        BODY="{\"sourceType\":\"git\",\"nodeType\":\"${{ inputs.nodeType }}\",\"pull\":\"${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}\",\"command\":\"${{ inputs.command }}\",\"sha\":\"${GITHUB_SHA}\",\"semver\":\"${{ inputs.semver }}\",\"arch\":\"${{ inputs.arch }}\"}"
         echo "POST ${{ inputs.starmapUrl }}/apis/core/v1/layer"
         echo "$BODY"
         curl -sf -X POST "${{ inputs.starmapUrl }}/apis/core/v1/layer" \

@@ -3,7 +3,6 @@ name: Publish layer to starmap
 on:
   push:
     branches: [main]
-    tags: ['v*']
 
 jobs:
   publish:
@@ -21,3 +20,5 @@ jobs:
           image: ghcr.io/${{ github.repository_owner }}/unikernel-test
           ghcrToken: ${{ secrets.GITHUB_TOKEN }}
           nodeType: StoredProcedure
+          semver: v1.0.0
+          arch: x86_64

@@ -12,11 +12,14 @@ inputs:
     description: token for GHCR login
     required: true
   semver:
-    description: version label; empty falls back to git tag, then starmap auto-increment
+    description: version to publish (e.g. v1.0.0); also used as the GHCR tag
+    required: true
+  arch:
+    description: build architecture (x86_64 | arm64 | ...)
     required: false
-    default: ""
+    default: x86_64
   nodeType:
-    description: "StoredProcedure | Trigger"
+    description: "StoredProcedure | Trigger | Event | Entrypoint"
     required: false
     default: StoredProcedure
 
@@ -34,33 +37,23 @@ runs:
       uses: unikraft/kraftkit@staging
       with:
         workdir: .
-        arch: x86_64
+        arch: ${{ inputs.arch }}
         plat: qemu
-        name: ${{ inputs.image }}:latest
+        name: ${{ inputs.image }}:${{ inputs.semver }}
         push: true
 
     - name: Resolve digest
       id: digest
       shell: bash
       run: |
-        DIGEST=$(docker buildx imagetools inspect ${{ inputs.image }}:latest --format '{{.Manifest.Digest}}' 2>/dev/null || true)
+        DIGEST=$(docker buildx imagetools inspect ${{ inputs.image }}:${{ inputs.semver }} --format '{{.Manifest.Digest}}' 2>/dev/null || true)
         if [ -z "$DIGEST" ]; then DIGEST="${GITHUB_SHA}"; fi
         echo "sha=$DIGEST" >> "$GITHUB_OUTPUT"
-
-    - name: Resolve version
-      id: ver
-      shell: bash
-      run: |
-        SEMVER="${{ inputs.semver }}"
-        if [ -z "$SEMVER" ] && [ "$GITHUB_REF_TYPE" = "tag" ]; then
-          SEMVER="$GITHUB_REF_NAME"
-        fi
-        echo "semver=$SEMVER" >> "$GITHUB_OUTPUT"
 
     - name: Notify starmap
       shell: bash
       run: |
-        BODY="{\"sourceType\":\"oci\",\"nodeType\":\"${{ inputs.nodeType }}\",\"image\":\"${{ inputs.image }}\",\"sha\":\"${{ steps.digest.outputs.sha }}\",\"semver\":\"${{ steps.ver.outputs.semver }}\"}"
+        BODY="{\"sourceType\":\"oci\",\"nodeType\":\"${{ inputs.nodeType }}\",\"image\":\"${{ inputs.image }}\",\"sha\":\"${{ steps.digest.outputs.sha }}\",\"semver\":\"${{ inputs.semver }}\",\"arch\":\"${{ inputs.arch }}\"}"
         echo "POST ${{ inputs.starmapUrl }}/apis/core/v1/layer"
         echo "$BODY"
         curl -sf -X POST "${{ inputs.starmapUrl }}/apis/core/v1/layer" \
