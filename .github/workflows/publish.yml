@@ -20,5 +20,5 @@ jobs:
           image: ghcr.io/${{ github.repository_owner }}/unikernel-test
           ghcrToken: ${{ secrets.GITHUB_TOKEN }}
           nodeType: StoredProcedure
-          semver: v1.0.0
+          semver: v1.0.2
           arch: x86_64
