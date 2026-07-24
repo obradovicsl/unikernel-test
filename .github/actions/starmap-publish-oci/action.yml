@@ -34,7 +34,7 @@ runs:
         password: ${{ inputs.ghcrToken }}
 
     - name: Build and push unikernel
-      uses: unikraft/kraftkit@staging
+      uses: unikraft/kraftkit@stable
       with:
         workdir: .
         arch: ${{ inputs.arch }}
