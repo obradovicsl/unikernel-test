@@ -10,10 +10,10 @@ permissions:
 
 jobs:
   publish:
-    uses: ./.github/workflows/publish-oci.yml
+    uses: ./.github/workflows/starmap-build-multiarch.yml
     with:
       image: ghcr.io/obradovicsl/unikernel-test
-      semver: v1.0.7
+      semver: v1.0.8
       archs: "x86_64,arm64"
       nodeType: StoredProcedure
       starmapUrl: https://diligent-smuggler-lanky.ngrok-free.dev

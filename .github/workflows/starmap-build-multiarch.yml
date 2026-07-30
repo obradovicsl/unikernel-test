@@ -1,4 +1,4 @@
-name: starmap publish (oci, reusable)
+name: starmap build multiarch (reusable)
 
 on:
   workflow_call:
@@ -48,7 +48,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Build ${{ matrix.arch }}
-        uses: ./.github/actions/starmap-publish-oci
+        uses: ./.github/actions/starmap-build-oci
         with:
           image: ${{ inputs.image }}
           ghcrToken: ${{ secrets.GITHUB_TOKEN }}
