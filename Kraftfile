@@ -8,5 +8,4 @@ rootfs: ./Dockerfile
 
 cmd: ["/helloworld"]
 
-targets:
-  - qemu/x86_64
+# targets are appended by the CI action from the workflow `archs` input
