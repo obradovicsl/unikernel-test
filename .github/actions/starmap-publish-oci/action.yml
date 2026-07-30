@@ -46,6 +46,8 @@ runs:
       uses: unikraft/kraftkit@stable
       with:
         workdir: .
+        arch: ${{ inputs.arch }}
+        plat: ${{ inputs.plat }}
         output: oci://${{ inputs.image }}:${{ inputs.semver }}-${{ inputs.arch }}
         push: true
 

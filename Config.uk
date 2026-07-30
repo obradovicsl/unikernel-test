@@ -1,0 +1,4 @@
+config APPUNIKERNELTEST_DEPENDENCIES
+	bool
+	default y
+	select LIBNOLIBC if !HAVE_LIBC

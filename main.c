@@ -2,7 +2,6 @@
 
 int main(void)
 {
-	puts("Hello from unikernel-test v2!");
-
+	printf("Hello from unikernel-test (native)!\n");
 	return 0;
 }

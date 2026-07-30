@@ -13,8 +13,8 @@ jobs:
     uses: ./.github/workflows/publish-oci.yml
     with:
       image: ghcr.io/obradovicsl/unikernel-test
-      semver: v1.0.3
-      archs: "x86_64,arm64"
+      semver: v1.0.4
+      archs: "x86_64"
       nodeType: StoredProcedure
       starmapUrl: https://diligent-smuggler-lanky.ngrok-free.dev
     secrets: inherit

@@ -1,0 +1,3 @@
+$(eval $(call addlib,appunikerneltest))
+
+APPUNIKERNELTEST_SRCS-y += $(APPUNIKERNELTEST_BASE)/main.c

@@ -2,10 +2,8 @@ spec: v0.6
 
 name: unikernel-test
 
-runtime: base:latest
-
-rootfs: ./Dockerfile
-
-cmd: ["/helloworld"]
+unikraft:
+  source: https://github.com/unikraft/unikraft.git
+  version: stable
 
 # targets are appended by the CI action from the workflow `archs` input
