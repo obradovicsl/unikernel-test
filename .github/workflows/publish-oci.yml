@@ -1,0 +1,82 @@
+name: starmap publish (oci, reusable)
+
+on:
+  workflow_call:
+    inputs:
+      image:
+        required: true
+        type: string
+      semver:
+        required: true
+        type: string
+      archs:
+        description: comma-separated architectures (e.g. "x86_64,arm64")
+        required: false
+        default: x86_64
+        type: string
+      nodeType:
+        required: false
+        default: StoredProcedure
+        type: string
+      starmapUrl:
+        required: true
+        type: string
+
+jobs:
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.m.outputs.matrix }}
+    steps:
+      - name: archs -> json matrix
+        id: m
+        shell: bash
+        run: |
+          JSON=$(echo "${{ inputs.archs }}" | tr ',' '\n' | sed 's/ //g' | grep . | jq -R . | jq -sc .)
+          echo "matrix=$JSON" >> "$GITHUB_OUTPUT"
+          echo "matrix: $JSON"
+
+  build:
+    needs: prepare
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        arch: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Publish (${{ matrix.arch }})
+        uses: ./.github/actions/starmap-publish-oci
+        with:
+          starmapUrl: ${{ inputs.starmapUrl }}
+          image: ${{ inputs.image }}
+          ghcrToken: ${{ secrets.GITHUB_TOKEN }}
+          nodeType: ${{ inputs.nodeType }}
+          semver: ${{ inputs.semver }}
+          arch: ${{ matrix.arch }}
+
+  merge:
+    needs: [prepare, build]
+    runs-on: ubuntu-latest
+    permissions:
+      packages: write
+    steps:
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Merge per-arch tags into one manifest list
+        shell: bash
+        run: |
+          SRCS=""
+          for a in $(echo "${{ inputs.archs }}" | tr ',' ' '); do
+            a=$(echo "$a" | xargs)
+            SRCS="$SRCS ${{ inputs.image }}:${{ inputs.semver }}-$a"
+          done
+          docker buildx imagetools create -t ${{ inputs.image }}:${{ inputs.semver }} $SRCS
+          echo "--- manifest list ---"
+          docker buildx imagetools inspect ${{ inputs.image }}:${{ inputs.semver }}

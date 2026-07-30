@@ -6,19 +6,11 @@ on:
 
 jobs:
   publish:
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-      packages: write
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Publish (oci source)
-        uses: ./.github/actions/starmap-publish-oci
-        with:
-          starmapUrl: https://diligent-smuggler-lanky.ngrok-free.dev
-          image: ghcr.io/${{ github.repository_owner }}/unikernel-test
-          ghcrToken: ${{ secrets.GITHUB_TOKEN }}
-          nodeType: StoredProcedure
-          semver: v1.0.3
-          archs: "x86_64,arm64"
+    uses: ./.github/workflows/publish-oci.yml
+    with:
+      image: ghcr.io/obradovicsl/unikernel-test
+      semver: v1.0.3
+      archs: "x86_64,arm64"
+      nodeType: StoredProcedure
+      starmapUrl: https://diligent-smuggler-lanky.ngrok-free.dev
+    secrets: inherit

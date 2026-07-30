@@ -1,5 +1,5 @@
-name: Starmap publish layer (oci)
-description: Build a unikernel (multi-arch), push it to an OCI registry, and register the version in starmap
+name: Starmap publish layer (oci, single arch)
+description: Build one arch of a unikernel, push it to GHCR, and register that build in starmap
 
 inputs:
   starmapUrl:
@@ -12,14 +12,13 @@ inputs:
     description: token for GHCR login
     required: true
   semver:
-    description: version to publish (e.g. v1.0.0); also used as the GHCR tag
+    description: version to publish (e.g. v1.0.0)
     required: true
-  archs:
-    description: comma-separated architectures to build (e.g. "x86_64,arm64")
-    required: false
-    default: x86_64
+  arch:
+    description: single architecture to build (e.g. x86_64)
+    required: true
   plat:
-    description: platform for the targets
+    description: platform for the target
     required: false
     default: qemu
   nodeType:
@@ -30,18 +29,10 @@ inputs:
 runs:
   using: composite
   steps:
-    - name: Set Kraftfile targets from archs
+    - name: Set Kraftfile target
       shell: bash
       run: |
-        {
-          echo ""
-          echo "targets:"
-          IFS=',' read -ra A <<< "${{ inputs.archs }}"
-          for a in "${A[@]}"; do
-            a=$(echo "$a" | xargs)   # trim
-            echo "  - ${{ inputs.plat }}/$a"
-          done
-        } >> Kraftfile
+        printf '\ntargets:\n  - %s/%s\n' "${{ inputs.plat }}" "${{ inputs.arch }}" >> Kraftfile
         echo "--- Kraftfile ---"; cat Kraftfile
 
     - name: Log in to GHCR
@@ -51,38 +42,30 @@ runs:
         username: ${{ github.actor }}
         password: ${{ inputs.ghcrToken }}
 
-    - name: Build and push unikernel
+    - name: Build and push (per-arch tag)
       uses: unikraft/kraftkit@stable
       with:
         workdir: .
-        output: oci://${{ inputs.image }}:${{ inputs.semver }}
+        output: oci://${{ inputs.image }}:${{ inputs.semver }}-${{ inputs.arch }}
         push: true
 
-    - name: Resolve per-arch builds
-      id: builds
+    - name: Resolve digest
+      id: digest
       shell: bash
       run: |
-        REF="${{ inputs.image }}:${{ inputs.semver }}"
-        RAW=$(docker buildx imagetools inspect "$REF" --raw 2>/dev/null || echo "")
-        # manifest list -> [{arch, sha}] ; fall back to single-arch digest
-        BUILDS=$(echo "$RAW" | jq -c '[.manifests[] | {arch: .platform.architecture, sha: .digest}]' 2>/dev/null || echo "")
-        if [ -z "$BUILDS" ] || [ "$BUILDS" = "[]" ] || [ "$BUILDS" = "null" ]; then
-          DIGEST=$(docker buildx imagetools inspect "$REF" --format '{{.Manifest.Digest}}' 2>/dev/null || echo "$GITHUB_SHA")
-          BUILDS="[{\"arch\":\"x86_64\",\"sha\":\"$DIGEST\"}]"
-        fi
-        echo "builds=$BUILDS" >> "$GITHUB_OUTPUT"
-        echo "resolved builds: $BUILDS"
+        REF="${{ inputs.image }}:${{ inputs.semver }}-${{ inputs.arch }}"
+        DIGEST=$(docker buildx imagetools inspect "$REF" --format '{{.Manifest.Digest}}' 2>/dev/null || echo "$GITHUB_SHA")
+        echo "sha=$DIGEST" >> "$GITHUB_OUTPUT"
+        echo "digest: $DIGEST"
 
-    - name: Notify starmap
+    - name: Notify starmap (this arch)
       shell: bash
       run: |
         BODY=$(jq -nc \
-          --arg st "oci" \
-          --arg nt "${{ inputs.nodeType }}" \
-          --arg img "${{ inputs.image }}" \
-          --arg sv "${{ inputs.semver }}" \
-          --argjson builds '${{ steps.builds.outputs.builds }}' \
-          '{sourceType:$st, nodeType:$nt, image:$img, semver:$sv, builds:$builds}')
+          --arg st "oci" --arg nt "${{ inputs.nodeType }}" \
+          --arg img "${{ inputs.image }}" --arg sv "${{ inputs.semver }}" \
+          --arg arch "${{ inputs.arch }}" --arg sha "${{ steps.digest.outputs.sha }}" \
+          '{sourceType:$st, nodeType:$nt, image:$img, semver:$sv, builds:[{arch:$arch, sha:$sha}]}')
         echo "POST ${{ inputs.starmapUrl }}/apis/core/v1/layer"
         echo "$BODY"
         curl -sf -X POST "${{ inputs.starmapUrl }}/apis/core/v1/layer" \
