@@ -47,13 +47,11 @@ jobs:
         arch: ${{ fromJSON(needs.prepare.outputs.matrix) }}
     steps:
       - uses: actions/checkout@v4
-      - name: Publish (${{ matrix.arch }})
+      - name: Build ${{ matrix.arch }}
         uses: ./.github/actions/starmap-publish-oci
         with:
-          starmapUrl: ${{ inputs.starmapUrl }}
           image: ${{ inputs.image }}
           ghcrToken: ${{ secrets.GITHUB_TOKEN }}
-          nodeType: ${{ inputs.nodeType }}
           semver: ${{ inputs.semver }}
           arch: ${{ matrix.arch }}
 
@@ -80,3 +78,26 @@ jobs:
           docker buildx imagetools create -t ${{ inputs.image }}:${{ inputs.semver }} $SRCS
           echo "--- manifest list ---"
           docker buildx imagetools inspect ${{ inputs.image }}:${{ inputs.semver }}
+
+      - name: Notify starmap (list digest + per-arch builds)
+        shell: bash
+        run: |
+          REF=${{ inputs.image }}:${{ inputs.semver }}
+          # manifest-list digest (arch-agnostic default)
+          LIST_SHA=$(docker buildx imagetools inspect "$REF" --format '{{.Manifest.Digest}}')
+          # per-arch digests FROM the merged list (match GHCR)
+          RAW=$(docker buildx imagetools inspect "$REF" --raw)
+          BUILDS=$(echo "$RAW" | jq -c '[.manifests[]
+            | select(.platform.os != "unknown")
+            | {arch: .platform.architecture, sha: .digest}]')
+          echo "list sha: $LIST_SHA"
+          echo "builds: $BUILDS"
+          BODY=$(jq -nc \
+            --arg st "oci" --arg nt "${{ inputs.nodeType }}" \
+            --arg img "${{ inputs.image }}" --arg sv "${{ inputs.semver }}" \
+            --arg sha "$LIST_SHA" --argjson builds "$BUILDS" \
+            '{sourceType:$st, nodeType:$nt, image:$img, semver:$sv, sha:$sha, builds:$builds}')
+          echo "$BODY"
+          curl -sf -X POST "${{ inputs.starmapUrl }}/apis/core/v1/layer" \
+            -H "Content-Type: application/json" \
+            -d "$BODY"
