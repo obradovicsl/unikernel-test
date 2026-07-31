@@ -28,13 +28,37 @@ jobs:
     outputs:
       matrix: ${{ steps.m.outputs.matrix }}
     steps:
-      - name: archs -> json matrix
+      - name: Log in to GHCR
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      # only build archs that this semver does not already have (rebuild would
+      # change the digest and starmap rejects a changed (semver,arch) build)
+      - name: missing archs -> json matrix
         id: m
         shell: bash
         run: |
-          JSON=$(echo "${{ inputs.archs }}" | tr ',' '\n' | sed 's/ //g' | grep . | jq -R . | jq -sc .)
+          REF=${{ inputs.image }}:${{ inputs.semver }}
+          EXISTING=$(docker buildx imagetools inspect "$REF" --raw 2>/dev/null \
+            | jq -r '.manifests[]? | select(.platform.os != "unknown") | .platform.architecture' \
+            | sort -u || true)
+          echo "already on ghcr: ${EXISTING:-<none>}"
+          MISSING=""
+          for a in $(echo "${{ inputs.archs }}" | tr ',' ' '); do
+            a=$(echo "$a" | xargs)
+            # yaml arch -> oci platform arch (x86_64->amd64)
+            case "$a" in x86_64) oci=amd64 ;; *) oci=$a ;; esac
+            if echo "$EXISTING" | grep -qx "$oci"; then
+              echo "skip $a (already present)"
+            else
+              MISSING="$MISSING $a"
+            fi
+          done
+          JSON=$(echo "$MISSING" | tr ' ' '\n' | grep . | jq -R . | jq -sc .)
           echo "matrix=$JSON" >> "$GITHUB_OUTPUT"
-          echo "matrix: $JSON"
+          echo "to build: $JSON"
 
   build:
     needs: prepare
@@ -57,6 +81,7 @@ jobs:
 
   merge:
     needs: [prepare, build]
+    if: ${{ !cancelled() && needs.build.result != 'failure' }}
     runs-on: ubuntu-latest
     permissions:
       packages: write
@@ -67,13 +92,20 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      # rebuild the list from all requested per-arch tags (old ones survive from
+      # earlier runs, new ones from this run) so adding an arch keeps the rest
       - name: Merge per-arch tags into one manifest list
         shell: bash
         run: |
           SRCS=""
           for a in $(echo "${{ inputs.archs }}" | tr ',' ' '); do
             a=$(echo "$a" | xargs)
-            SRCS="$SRCS ${{ inputs.image }}:${{ inputs.semver }}-$a"
+            TAG=${{ inputs.image }}:${{ inputs.semver }}-$a
+            if docker buildx imagetools inspect "$TAG" >/dev/null 2>&1; then
+              SRCS="$SRCS $TAG"
+            else
+              echo "warning: $TAG missing, skipping from list"
+            fi
           done
           docker buildx imagetools create -t ${{ inputs.image }}:${{ inputs.semver }} $SRCS
           echo "--- manifest list ---"
