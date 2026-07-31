@@ -48,9 +48,8 @@ jobs:
           MISSING=""
           for a in $(echo "${{ inputs.archs }}" | tr ',' ' '); do
             a=$(echo "$a" | xargs)
-            # yaml arch -> oci platform arch (x86_64->amd64)
-            case "$a" in x86_64) oci=amd64 ;; *) oci=$a ;; esac
-            if echo "$EXISTING" | grep -qx "$oci"; then
+            # kraftkit writes the arch name verbatim (x86_64, arm64) - no oci remap
+            if echo "$EXISTING" | grep -qx "$a"; then
               echo "skip $a (already present)"
             else
               MISSING="$MISSING $a"
